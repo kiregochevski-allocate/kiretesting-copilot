@@ -1,0 +1,53 @@
+{
+  "offline": true,
+  "message": "You are viewing cached data. Some information may be outdated.",
+  "timestamp": 1689179426000,
+  "fallbackData": {
+    "products": [
+      {
+        "id": "offline-1",
+        "name": "Product 1 (Offline Data)",
+        "description": "This is cached product data",
+        "tenantId": "offline-tenant-1",
+        "createdAt": "2023-07-12T10:30:00Z"
+      },
+      {
+        "id": "offline-2",
+        "name": "Product 2 (Offline Data)",
+        "description": "This is cached product data",
+        "tenantId": "offline-tenant-1",
+        "createdAt": "2023-07-12T09:45:00Z"
+      }
+    ],
+    "tenants": [
+      {
+        "id": "offline-tenant-1",
+        "name": "Tenant 1 (Offline Data)",
+        "description": "This is cached tenant data",
+        "createdAt": "2023-07-11T14:20:00Z"
+      }
+    ],
+    "components": [
+      {
+        "id": "offline-comp-1",
+        "name": "Component 1 (Offline Data)",
+        "description": "This is cached component data",
+        "productId": "offline-1",
+        "createdAt": "2023-07-12T11:15:00Z"
+      }
+    ],
+    "environments": [
+      {
+        "id": "offline-env-1",
+        "name": "Environment 1 (Offline Data)",
+        "description": "This is cached environment data",
+        "tenantId": "offline-tenant-1",
+        "createdAt": "2023-07-11T16:00:00Z"
+      }
+    ],
+    "status": {
+      "api": "offline",
+      "lastSync": "2023-07-12T12:30:26Z"
+    }
+  }
+}
