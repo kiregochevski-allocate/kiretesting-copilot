@@ -14,6 +14,7 @@ import {
   ListItemText,
   Toolbar,
   Typography,
+  Tooltip,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -22,7 +23,10 @@ import {
   Business as TenantsIcon,
   Extension as ComponentsIcon,
   Public as EnvironmentsIcon,
+  LightMode as LightModeIcon,
+  DarkMode as DarkModeIcon,
 } from '@mui/icons-material';
+import { useTheme } from '../contexts/ThemeContext';
 
 const drawerWidth = 240;
 
@@ -33,6 +37,7 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const { mode, toggleTheme } = useTheme();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -99,9 +104,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div">
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             Kire Testing Platform
           </Typography>
+          <Tooltip title={`Switch to ${mode === 'light' ? 'dark' : 'light'} mode`}>
+            <IconButton color="inherit" onClick={toggleTheme} size="large">
+              {mode === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
+            </IconButton>
+          </Tooltip>
         </Toolbar>
       </AppBar>
       <Box

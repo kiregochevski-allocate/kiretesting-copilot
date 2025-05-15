@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("KireTestingAPI")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2e5b19b65c16a06fb57b95db72ff62c6b44d0afb")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ca1b9a761357933131d621421ce9b635d9f286de")]
 [assembly: System.Reflection.AssemblyProductAttribute("KireTestingAPI")]
 [assembly: System.Reflection.AssemblyTitleAttribute("KireTestingAPI")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
