@@ -1,0 +1,110 @@
+# Default values for kire-testing-app
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+global:
+  environment: dev
+
+frontend:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/your-username/kire-testing-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      kubernetes.io/ingress.class: nginx
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    hosts:
+      - host: kire-testing.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
+backend:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/your-username/kire-testing-api
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+  ingress:
+    enabled: false
+  env:
+    - name: ASPNETCORE_ENVIRONMENT
+      value: Production
+    - name: ConnectionStrings__DefaultConnection
+      valueFrom:
+        secretKeyRef:
+          name: kire-testing-db-secret
+          key: connection-string
+
+database:
+  enabled: true
+  # Use existing secret or create a new one
+  existingSecret: ""
+  secretKey: "connection-string"
+  connectionString: "Server=sqlserver;Database=KireTestingDB;User Id=sa;Password=YourStrongPassword!;TrustServerCertificate=True;"
+  
+# For development purposes - enable or disable components
+development:
+  skipMigrations: false
+  useMockData: false
+
+# Service dependencies
+dependencies:
+  sqlserver:
+    enabled: false
+    # When false, an external SQL server is assumed to be available
+    # When true, a SQL server pod will be deployed (for dev/test environments)
+
+# ArgoCD configuration
+argocd:
+  project: default
+  syncOptions:
+    - CreateNamespace=true
+
+# Monitoring configuration
+monitoring:
+  enabled: false
+  serviceMonitor:
+    additionalLabels:
+      release: prometheus
+    interval: 15s
+    scrapeTimeout: 10s
+  grafanaDashboards:
+    enabled: false

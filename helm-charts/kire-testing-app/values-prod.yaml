@@ -1,0 +1,66 @@
+# Values specific for the production environment
+global:
+  environment: prod
+
+frontend:
+  replicaCount: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 75
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+  ingress:
+    hosts:
+      - host: kire-testing.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    tls:
+      - secretName: kire-testing-tls
+        hosts:
+          - kire-testing.example.com
+
+backend:
+  replicaCount: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 75
+  resources:
+    limits:
+      cpu: 1500m
+      memory: 1.5Gi
+    requests:
+      cpu: 500m
+      memory: 768Mi
+  env:
+    - name: ASPNETCORE_ENVIRONMENT
+      value: Production
+
+# All development features disabled in production
+development:
+  skipMigrations: true # In prod, run migrations as separate job
+  useMockData: false
+
+# Enable monitoring in production
+monitoring:
+  enabled: true
+  serviceMonitor:
+    additionalLabels:
+      release: prometheus
+    interval: 30s
+    scrapeTimeout: 15s
+  grafanaDashboards:
+    enabled: true

@@ -1,0 +1,263 @@
+name: Enhanced Build and Deploy Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      deploy_environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE_NAME: ${{ github.repository }}/kire-testing-api
+  FRONTEND_IMAGE_NAME: ${{ github.repository }}/kire-testing-frontend
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Set up .NET for backend
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      # Set up Node.js for frontend
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/kire-testing-frontend/package-lock.json'
+          
+      # Build and test backend
+      - name: Build backend
+        run: |
+          cd backend/KireTestingAPI
+          dotnet restore
+          dotnet build --no-restore --configuration Release
+          
+      - name: Test backend
+        run: |
+          cd backend/KireTestingAPI
+          dotnet test --no-build --configuration Release
+          
+      # Run OWASP dependency check on backend
+      - name: Run OWASP dependency check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'KireTestingAPI'
+          path: 'backend/KireTestingAPI'
+          format: 'HTML'
+          out: 'reports'
+          
+      # Upload security report
+      - name: Upload security report
+        uses: actions/upload-artifact@v3
+        with:
+          name: dependency-check-report
+          path: reports
+
+      # Install frontend dependencies
+      - name: Install frontend dependencies
+        run: |
+          cd frontend/kire-testing-frontend
+          npm ci
+          
+      # Build frontend
+      - name: Build frontend
+        run: |
+          cd frontend/kire-testing-frontend
+          npm run build
+          
+      # Run frontend tests
+      - name: Test frontend
+        run: |
+          cd frontend/kire-testing-frontend
+          npm test -- --passWithNoTests
+          
+      # Run frontend lint
+      - name: Lint frontend
+        run: |
+          cd frontend/kire-testing-frontend
+          npm run lint || echo "Linting warnings found, but continuing"
+          
+  build-and-push-images:
+    name: Build and Push Docker Images
+    needs: build-and-test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      # Log in to the registry
+      - name: Log in to the Container registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Set up Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # Build and push Docker image for backend
+      - name: Build and push backend image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend
+          file: ./backend/KireTestingAPI/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ env.IMAGE_TAG }}, ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_VERSION=${{ env.IMAGE_TAG }}
+
+      # Build and push Docker image for frontend
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./frontend/kire-testing-frontend
+          file: ./frontend/kire-testing-frontend/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ env.IMAGE_TAG }}, ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
+      # Scan container images for vulnerabilities
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ env.IMAGE_TAG }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      # Upload Trivy scan results
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+          
+  update-helm-charts:
+    name: Update Helm Charts
+    needs: build-and-push-images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      # Set environment-specific values file
+      - name: Set environment values file
+        id: env-file
+        run: |
+          BRANCH=${GITHUB_REF#refs/heads/}
+          ENV_FILE="values-dev.yaml"
+          
+          if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+            ENV_FILE="values-prod.yaml"
+          elif [ "$BRANCH" = "develop" ]; then
+            ENV_FILE="values-staging.yaml"
+          fi
+          
+          echo "::set-output name=file::$ENV_FILE"
+          echo "Environment file: $ENV_FILE"
+
+      # Update Helm chart versions
+      - name: Update Helm chart versions
+        run: |
+          cd helm-charts/kire-testing-app
+          sed -i "s/appVersion: .*$/appVersion: ${{ env.IMAGE_TAG }}/" Chart.yaml
+          sed -i "s/tag: .*$/tag: ${{ env.IMAGE_TAG }}/" ${{ steps.env-file.outputs.file }}
+          
+      # Lint Helm chart
+      - name: Lint Helm chart
+        uses: helm/chart-testing-action@v2.0.1
+        with:
+          ct_command: lint
+          
+      # Configure Git
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      # Commit and push updated Helm charts
+      - name: Commit and push updated Helm charts
+        run: |
+          git add helm-charts/kire-testing-app/Chart.yaml helm-charts/kire-testing-app/${{ steps.env-file.outputs.file }}
+          git commit -m "Update Helm charts for deployment ${{ env.IMAGE_TAG }} [skip ci]"
+          git push
+
+  deploy:
+    name: Deploy with ArgoCD
+    needs: update-helm-charts
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')
+    
+    environment:
+      name: ${{ github.event.inputs.deploy_environment || (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' && 'prod') || (github.ref == 'refs/heads/develop' && 'staging') || 'dev' }}
+    
+    steps:
+      - name: Determine environment
+        id: determine-env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.deploy_environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; then
+            ENV="prod"
+          elif [ "${{ github.ref }}" == "refs/heads/develop" ]; then
+            ENV="staging"
+          else
+            ENV="dev"
+          fi
+          echo "::set-output name=env::$ENV"
+          echo "Deploying to $ENV environment"
+    
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
+          rm argocd-linux-amd64
+
+      - name: Login to ArgoCD
+        run: |
+          argocd login ${{ secrets.ARGOCD_SERVER }} --username ${{ secrets.ARGOCD_USERNAME }} --password ${{ secrets.ARGOCD_PASSWORD }} --insecure
+
+      - name: Sync ArgoCD application
+        run: |
+          argocd app sync kire-testing-app-${{ steps.determine-env.outputs.env }}
+          argocd app wait kire-testing-app-${{ steps.determine-env.outputs.env }} --health --timeout 300

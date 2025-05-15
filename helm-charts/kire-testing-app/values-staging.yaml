@@ -1,0 +1,51 @@
+# Values specific for the staging environment
+global:
+  environment: staging
+
+frontend:
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  ingress:
+    hosts:
+      - host: kire-testing-staging.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-staging
+    tls:
+      - secretName: kire-testing-staging-tls
+        hosts:
+          - kire-testing-staging.example.com
+
+backend:
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+  resources:
+    limits:
+      cpu: 750m
+      memory: 768Mi
+    requests:
+      cpu: 250m
+      memory: 384Mi
+  env:
+    - name: ASPNETCORE_ENVIRONMENT
+      value: Staging
+
+# Development features disabled in staging
+development:
+  skipMigrations: false
+  useMockData: false

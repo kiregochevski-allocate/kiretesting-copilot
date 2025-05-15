@@ -1,0 +1,37 @@
+# Values specific for the development environment
+global:
+  environment: dev
+
+frontend:
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  ingress:
+    hosts:
+      - host: kire-testing-dev.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+
+backend:
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: 300m
+      memory: 384Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  env:
+    - name: ASPNETCORE_ENVIRONMENT
+      value: Development
+
+# Enable mock data for development
+development:
+  skipMigrations: false
+  useMockData: true
